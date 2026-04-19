@@ -235,7 +235,7 @@ This project directly mirrors real-world use cases in:
 
 ## 👨‍💻 Author
 
-**Sriram** — Data Science Student
+**Sriram**
 
 [![GitHub](https://img.shields.io/badge/GitHub-Sriii27-black?style=flat-square&logo=github)](https://github.com/Sriii27)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat-square&logo=linkedin)](www.linkedin.com/in/-sriram27)
