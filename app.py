@@ -417,9 +417,16 @@ with tabs[0]:
             shap_values = explainer(input_data)
         fig_shap, ax = plt.subplots(figsize=(10, 4))
         shap.plots.waterfall(shap_values[0], show=False)
-        fig_shap = plt.gcf()
-        fig_shap.patch.set_facecolor("#ccd5de")
-        st.pyplot(fig_shap)
+        fig_s = plt.gcf()
+        fig_s.patch.set_facecolor('#0d1b2a')
+        for ax in fig_s.axes:
+            ax.set_facecolor('#0d1b2a')
+            ax.tick_params(colors='white')
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            for text in ax.texts:
+                text.set_color('white')
+        st.pyplot(fig_s)
         plt.close()
 
         # ── Recommendations ──────────────────────────────────
@@ -1173,7 +1180,7 @@ with tabs[0]:
             'prob': prob, 'pred': pred,
             'air_temp': air_temp, 'process_temp': process_temp,
             'rpm': rpm, 'torque': torque, 'tool_wear': tool_wear,
-            'machine_type': machine_type,
+            'machine_type': machine_type.replace("—", "-").replace("–", "-"),
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -1391,10 +1398,19 @@ with tabs[0]:
         with st.spinner("Computing SHAP values..."):
             explainer = shap.Explainer(model)
             shap_values = explainer(input_data)
+        plt.style.use('default')
         fig_shap, _ = plt.subplots(figsize=(10, 4))
         shap.plots.waterfall(shap_values[0], show=False)
-        plt.gcf().patch.set_facecolor('#050d1a')
-        st.pyplot(plt.gcf())
+        fig_s = plt.gcf()
+        fig_s.patch.set_facecolor('#0d1b2a')
+        for ax in fig_s.axes:
+            ax.set_facecolor('#0d1b2a')
+            ax.tick_params(colors='white')
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            for text in ax.texts:
+                text.set_color('white')
+        st.pyplot(fig_s)
         plt.close()
         
 
@@ -1616,6 +1632,8 @@ with tabs[3]:
 
         st.markdown("")
         if st.button("📥 GENERATE PDF REPORT", use_container_width=True):
+            def c(text):
+                return str(text).encode('ascii', 'ignore').decode('ascii').strip()
             pdf = FPDF()
             pdf.add_page()
             pdf.set_fill_color(2, 8, 24)
@@ -1643,6 +1661,7 @@ with tabs[3]:
                 ("Tool Wear", f"{p['tool_wear']} min"),
             ]
             for label, value in params:
+                value = str(value).encode("ascii", "ignore").decode("ascii").strip()
                 pdf.set_text_color(136, 146, 176)
                 pdf.cell(80, 7, label + ":", ln=False)
                 pdf.set_text_color(255, 255, 255)
@@ -1669,11 +1688,62 @@ with tabs[3]:
                 rec = "Schedule maintenance within 24 hours. Monitor sensors closely."
             else:
                 rec = "Continue normal operation. All parameters within acceptable range."
-            pdf.multi_cell(0, 7, rec)
+            pdf.multi_cell(0, 7, c(rec))
+            pdf.ln(5)
+
+            # Cost Analysis
+            pdf.set_font("Helvetica", "B", 13)
+            pdf.set_text_color(255, 107, 53)
+            pdf.cell(0, 10, "COST ANALYSIS", ln=True)
+
+            unplanned = int(p['prob'] * 8 * 500)
+            repair = int(p['prob'] * 15000)
+            loss = int(p['prob'] * 25000)
+            total_fail = unplanned + repair + loss
+            prev_service = 2500
+            prev_parts = int(p['tool_wear'] / 253 * 3000)
+            total_prev = prev_service + prev_parts
+            savings = total_fail - total_prev
+
+            cost_items = [
+                ("Failure Cost (if ignored)", f"Rs {total_fail:,}"),
+                ("Preventive Cost", f"Rs {total_prev:,}"),
+                ("Potential Savings", f"Rs {savings:,}"),
+            ]
+            pdf.set_font("Helvetica", size=10)
+            for label, value in cost_items:
+                pdf.set_text_color(136, 146, 176)
+                pdf.cell(80, 7, c(label) + ":", ln=False)
+                pdf.set_text_color(255, 255, 255)
+                pdf.cell(0, 7, c(value), ln=True)
+
+            # Failure Type Analysis
+            pdf.ln(5)
+            pdf.set_font("Helvetica", "B", 13)
+            pdf.set_text_color(255, 107, 53)
+            pdf.cell(0, 10, "FAILURE TYPE ANALYSIS", ln=True)
+
+            temp_diff = p['process_temp'] - p['air_temp']
+            failure_types = {
+                "Tool Wear": min(100, p['tool_wear'] / 253 * 100 * 1.2),
+                "Heat Dissipation": min(100, max(0, (temp_diff - 8.6) / 3 * 100)),
+                "Power Failure": min(100, max(0, (p['torque'] * p['rpm'] / 9550 - 3.5) / 6 * 100)),
+                "Overstrain": min(100, max(0, (p['torque'] * p['tool_wear'] - 11000) / 3000 * 100)),
+                "Random": 3.0
+            }
+            pdf.set_font("Helvetica", size=10)
+            for fname, fval in failure_types.items():
+                color = (255, 68, 68) if fval > 50 else (255, 170, 0) if fval > 25 else (0, 255, 136)
+                pdf.set_text_color(136, 146, 176)
+                pdf.cell(80, 7, c(fname) + ":", ln=False)
+                pdf.set_text_color(*color)
+                pdf.cell(0, 7, f"{fval:.1f}%", ln=True)
+
             pdf.ln(10)
+            # Footer
             pdf.set_font("Helvetica", size=8)
             pdf.set_text_color(60, 70, 90)
-            pdf.cell(0, 6, "GUARDIAN — Smart Industrial Maintenance Intelligence System", align='C')
+            pdf.cell(0, 6, "GUARDIAN - Smart Industrial Maintenance Intelligence System", align='C')
 
             report_path = os.path.join(BASE_DIR, 'guardian_report.pdf')
             pdf.output(report_path)
